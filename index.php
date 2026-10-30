@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     try {
-        if ($action === 'create') {                       // Task 4
+        if ($action === 'create') {
             [$d, $errors] = validate($_POST, true);
             if (!$errors) {
                 $chk = $pdo->prepare("SELECT 1 FROM products WHERE product_id = ?");
@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $old = $d;
 
-        } elseif ($action === 'update') {                 // Task 6
+        } elseif ($action === 'update') {
             [$d, $errors] = validate($_POST, false);
             $d['product_id'] = clean($_POST['product_id'] ?? '');
             if (!$errors) {
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $editing = $d;
 
-        } elseif ($action === 'delete') {                 // Task 7
+        } elseif ($action === 'delete') {
             $st = $pdo->prepare("DELETE FROM products WHERE product_id = ?");
             $st->execute([clean($_POST['product_id'] ?? '')]);
             flash($st->rowCount() ? 'success' : 'error',
@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect();
         }
     } catch (PDOException $ex) {
-        $errors[] = "A database error occurred. Please try again.";   // no raw error leaked
+        $errors[] = "A database error occurred. Please try again.";
     }
 }
 
@@ -104,6 +104,10 @@ $products = $pdo->query("SELECT * FROM products ORDER BY created_at DESC")->fetc
 
 $flash = $_SESSION['flash'] ?? null; unset($_SESSION['flash']);
 $isEdit = $editing !== null;
+$totalProducts = count($products);
+$totalQty = array_sum(array_column($products, 'quantity'));
+$totalValue = 0;
+foreach ($products as $p) { $totalValue += $p['price'] * $p['quantity']; }
 $f = $isEdit ? $editing : $old;
 ?>
 <!DOCTYPE html>
@@ -113,76 +117,120 @@ $f = $isEdit ? $editing : $old;
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TechMart Product Management</title>
 <style>
-  body{font-family:Arial,sans-serif;max-width:960px;margin:20px auto;padding:0 12px;color:#222}
-  h1{color:#1a4d8f} .box{border:1px solid #ccc;border-radius:6px;padding:16px;margin-bottom:24px}
-  label{display:block;margin-top:10px;font-weight:bold}
-  input,textarea{width:100%;padding:7px;box-sizing:border-box}
-  button,.btn{padding:7px 14px;border:0;border-radius:4px;background:#1a4d8f;color:#fff;cursor:pointer;text-decoration:none;font-size:14px}
-  .del{background:#c0392b} .gray{background:#777}
-  table{width:100%;border-collapse:collapse} th,td{border:1px solid #ccc;padding:8px;text-align:left}
-  th{background:#eef2f7} .msg{padding:10px;border-radius:4px;margin-bottom:14px}
-  .success{background:#d4edda;color:#155724} .error{background:#f8d7da;color:#721c24}
+  :root{--primary:#2563eb;--primary-d:#1d4ed8;--bg:#f1f5f9;--card:#fff;--text:#1e293b;--muted:#64748b;--border:#e2e8f0}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:22px 0;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+  header h1{margin:0;font-size:24px} header p{margin:0;opacity:.85;font-size:14px}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 16px}
+  main{padding:24px 0 40px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:22px}
+  .stat{background:var(--card);border-radius:12px;padding:16px 18px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:5px solid var(--primary)}
+  .stat span{display:block;color:var(--muted);font-size:13px} .stat strong{font-size:24px}
+  .card{background:var(--card);border-radius:12px;padding:22px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  .card h2{margin:0 0 16px;font-size:19px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+  .full{grid-column:1/-1}
+  label{display:block;margin-bottom:5px;font-weight:600;font-size:14px}
+  input,textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:inherit;background:#f8fafc;transition:.15s}
+  input:focus,textarea:focus{outline:none;border-color:var(--primary);background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+  input[readonly]{background:#e2e8f0;cursor:not-allowed}
+  .btn,button{display:inline-block;padding:9px 16px;border:0;border-radius:8px;background:var(--primary);color:#fff;font:inherit;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;transition:.15s}
+  .btn:hover,button:hover{background:var(--primary-d)}
+  .del{background:#dc2626} .del:hover{background:#b91c1c}
+  .gray{background:#64748b} .gray:hover{background:#475569}
+  .sm{padding:6px 12px;font-size:13px}
+  .actions{margin-top:18px}
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{background:#f1f5f9;text-align:left;padding:12px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  td{padding:12px;border-top:1px solid var(--border);vertical-align:middle}
+  tbody tr:hover{background:#f8fafc}
+  .tag{background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
+  .badge{padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+  .ok{background:#dcfce7;color:#166534} .low{background:#fef9c3;color:#854d0e} .out{background:#fee2e2;color:#991b1b}
+  .msg{padding:12px 16px;border-radius:8px;margin-bottom:18px;font-weight:500}
+  .success{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
+  .error{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+  .msg ul{margin:0;padding-left:18px}
   form.inline{display:inline}
+  .empty{text-align:center;color:var(--muted);padding:30px}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<h1>TechMart Electronics – Product Management</h1>
+<header><div class="wrap">
+  <h1>&#128230; TechMart Electronics</h1>
+  <p>Product Management System</p>
+</div></header>
+<main class="wrap">
+
+<div class="stats">
+  <div class="stat"><span>Total Products</span><strong><?= $totalProducts ?></strong></div>
+  <div class="stat"><span>Total Stock (units)</span><strong><?= (int)$totalQty ?></strong></div>
+  <div class="stat"><span>Inventory Value</span><strong>&#8377;<?= number_format($totalValue, 2) ?></strong></div>
+</div>
 
 <?php if ($flash): ?><div class="msg <?= e($flash[0]) ?>"><?= e($flash[1]) ?></div><?php endif; ?>
 <?php if ($errors): ?>
-  <div class="msg error"><ul style="margin:0"><?php foreach ($errors as $er): ?><li><?= e($er) ?></li><?php endforeach; ?></ul></div>
+  <div class="msg error"><ul><?php foreach ($errors as $er): ?><li><?= e($er) ?></li><?php endforeach; ?></ul></div>
 <?php endif; ?>
 
-<div class="box">
+<div class="card">
   <h2><?= $isEdit ? 'Update Product' : 'Add New Product' ?></h2>
   <form method="post" action="index.php">
     <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">
     <input type="hidden" name="action" value="<?= $isEdit ? 'update' : 'create' ?>">
 
-    <label>Product ID</label>
-    <input type="text" name="product_id" maxlength="20" required value="<?= e($f['product_id'] ?? '') ?>" <?= $isEdit ? 'readonly' : '' ?>>
-    <label>Product Name</label>
-    <input type="text" name="product_name" maxlength="100" required value="<?= e($f['product_name'] ?? '') ?>">
-    <label>Category</label>
-    <input type="text" name="category" maxlength="50" required value="<?= e($f['category'] ?? '') ?>">
-    <label>Price</label>
-    <input type="number" name="price" step="0.01" min="0" required value="<?= e($f['price'] ?? '') ?>">
-    <label>Quantity</label>
-    <input type="number" name="quantity" min="0" step="1" required value="<?= e($f['quantity'] ?? '') ?>">
-    <label>Description</label>
-    <textarea name="description" rows="3" maxlength="500"><?= e($f['description'] ?? '') ?></textarea>
+    <div class="grid">
+      <div><label>Product ID</label>
+      <input type="text" name="product_id" maxlength="20" required placeholder="e.g. TM-101" value="<?= e($f['product_id'] ?? '') ?>" <?= $isEdit ? 'readonly' : '' ?>></div>
+      <div><label>Product Name</label>
+      <input type="text" name="product_name" maxlength="100" required placeholder="e.g. Wireless Mouse" value="<?= e($f['product_name'] ?? '') ?>"></div>
+      <div><label>Category</label>
+      <input type="text" name="category" maxlength="50" required placeholder="e.g. Accessories" value="<?= e($f['category'] ?? '') ?>"></div>
+      <div><label>Price (&#8377;)</label>
+      <input type="number" name="price" step="0.01" min="0" required placeholder="0.00" value="<?= e($f['price'] ?? '') ?>"></div>
+      <div><label>Quantity</label>
+      <input type="number" name="quantity" min="0" step="1" required placeholder="0" value="<?= e($f['quantity'] ?? '') ?>"></div>
+      <div class="full"><label>Description</label>
+      <textarea name="description" rows="3" maxlength="500" placeholder="Short product description"><?= e($f['description'] ?? '') ?></textarea></div>
+    </div>
 
-    <p><button type="submit"><?= $isEdit ? 'Update' : 'Add Product' ?></button>
+    <p class="actions"><button type="submit"><?= $isEdit ? 'Update' : 'Add Product' ?></button>
        <?php if ($isEdit): ?><a class="btn gray" href="index.php">Cancel</a><?php endif; ?></p>
   </form>
 </div>
 
+<div class="card">
 <h2>All Products</h2>
-<table>
+<div class="tbl-wrap"><table>
   <tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Qty</th><th>Description</th><th>Actions</th></tr>
   <?php if (!$products): ?>
-    <tr><td colspan="7">No products found.</td></tr>
+    <tr><td colspan="7" class="empty">No products found. Add your first product above.</td></tr>
   <?php endif; ?>
   <?php foreach ($products as $p): ?>
   <tr>
     <td><?= e($p['product_id']) ?></td>
     <td><?= e($p['product_name']) ?></td>
-    <td><?= e($p['category']) ?></td>
-    <td><?= number_format((float)$p['price'], 2) ?></td>
-    <td><?= (int)$p['quantity'] ?></td>
+    <td><span class="tag"><?= e($p['category']) ?></span></td>
+    <td>&#8377;<?= number_format((float)$p['price'], 2) ?></td>
+    <td><?php $q=(int)$p['quantity']; ?><span class="badge <?= $q==0 ? 'out' : ($q<10 ? 'low' : 'ok') ?>"><?= $q ?></span></td>
     <td><?= e($p['description']) ?></td>
     <td>
-      <a class="btn" href="index.php?edit=<?= urlencode($p['product_id']) ?>">Edit</a>
-      <form class="inline" method="post" action="index.php"
+      <a class="btn sm" href="index.php?edit=<?= urlencode($p['product_id']) ?>">Edit</a>
+            <form class="inline" method="post" action="index.php"
             onsubmit="return confirm('Delete this product permanently?');">
         <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">
         <input type="hidden" name="action" value="delete">
         <input type="hidden" name="product_id" value="<?= e($p['product_id']) ?>">
-        <button type="submit" class="del">Delete</button>
+        <button type="submit" class="del sm">Delete</button>
       </form>
     </td>
   </tr>
   <?php endforeach; ?>
-</table>
+</table></div></div>
+</main>
 </body>
 </html>
