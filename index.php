@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-/* ---------- Task 2: Database connection (PDO) ---------- */
 $host = 'localhost'; $db = 'techmart_db'; $user = 'root'; $pass = '';
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8mb4", $user, $pass, [
@@ -13,7 +12,6 @@ try {
     die("Database connection failed. Please check configuration.");
 }
 
-/* ---------- Helpers ---------- */
 function e($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function clean($s) { return trim(strip_tags((string)$s)); }
 function flash($type, $msg) { $_SESSION['flash'] = [$type, $msg]; }
@@ -21,7 +19,6 @@ function redirect() { header("Location: index.php"); exit; }
 
 if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(16));
 
-/* ---------- Task 8: Server-side validation + sanitization ---------- */
 function validate(array $in, bool $isNew): array {
     $d = [
         'product_id'   => clean($in['product_id'] ?? ''),
@@ -47,7 +44,6 @@ function validate(array $in, bool $isNew): array {
     return [$d, $err];
 }
 
-/* ---------- POST handlers (Create / Update / Delete) ---------- */
 $errors = []; $old = []; $editing = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -97,7 +93,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-/* ---------- Load product for edit form ---------- */
 if (isset($_GET['edit']) && !$editing) {
     $st = $pdo->prepare("SELECT * FROM products WHERE product_id = ?");
     $st->execute([clean($_GET['edit'])]);
@@ -105,7 +100,6 @@ if (isset($_GET['edit']) && !$editing) {
     if (!$editing) flash('error', 'Product not found.');
 }
 
-/* ---------- Task 5: Read all products ---------- */
 $products = $pdo->query("SELECT * FROM products ORDER BY created_at DESC")->fetchAll();
 
 $flash = $_SESSION['flash'] ?? null; unset($_SESSION['flash']);
@@ -139,7 +133,6 @@ $f = $isEdit ? $editing : $old;
   <div class="msg error"><ul style="margin:0"><?php foreach ($errors as $er): ?><li><?= e($er) ?></li><?php endforeach; ?></ul></div>
 <?php endif; ?>
 
-<!-- Task 3: Product entry form -->
 <div class="box">
   <h2><?= $isEdit ? 'Update Product' : 'Add New Product' ?></h2>
   <form method="post" action="index.php">
@@ -164,7 +157,6 @@ $f = $isEdit ? $editing : $old;
   </form>
 </div>
 
-<!-- Task 5: Tabular display -->
 <h2>All Products</h2>
 <table>
   <tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Qty</th><th>Description</th><th>Actions</th></tr>
@@ -181,7 +173,6 @@ $f = $isEdit ? $editing : $old;
     <td><?= e($p['description']) ?></td>
     <td>
       <a class="btn" href="index.php?edit=<?= urlencode($p['product_id']) ?>">Edit</a>
-      <!-- Task 7: confirmation before delete -->
       <form class="inline" method="post" action="index.php"
             onsubmit="return confirm('Delete this product permanently?');">
         <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">

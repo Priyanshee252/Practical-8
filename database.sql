@@ -1,4 +1,3 @@
--- Task 1: Create database and table
 CREATE DATABASE IF NOT EXISTS techmart_db
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE techmart_db;
